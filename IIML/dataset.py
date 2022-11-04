@@ -8,6 +8,8 @@ import numpy as np
 import os
 import skimage
 from PIL import Image, ImageDraw
+import torchvision.transforms as T
+import matplotlib as plt
 
 
 class WristDataset(data.Dataset):
@@ -22,49 +24,113 @@ class WristDataset(data.Dataset):
         self.root_dir = root_dir
         self.transform = transform
         self.data = []
-        self.initialize_data(root_dir)
+        self.image_shape = 512
+        self.pad_x_1 = None
+        self.pad_y_1 = None
+        # create the dataset from json files
+        self._initialize_data(root_dir)
+
+    def __len__(self):
+        return len(self.data)
 
     def __getitem__(self, idx):
+        """
+        :param idx: index of the item which we try to get the sample
+        :return: sample: a dictionary consisting of image tensor and wrist joint line points tensor
+        """
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
         inv_data_path = self.data[idx]
         inv_data = json.load(open(inv_data_path))
 
-        # img_name = inv_data["imagePath"]
-        img_name = inv_data_path.rsplit('\\', 1)[-1].split(".")[0] + ".png"
-        image_path = os.path.join(inv_data_path.rsplit('\\', 1)[0], img_name)
-        image = Image.open(image_path)
-        image = torchvision.transforms.Resize((512, 512))(image)
-        # transform = torchvision.transforms.PILToTensor()
-        # image_tensor = transform(image)
-
-        image = np.expand_dims(np.array(image, dtype=float), axis=0)
-        image_tensor = torch.Tensor(image)
-
-        points = [d['points'] for d in inv_data["shapes"] if d['label'] == 'Wrist Joint Line'][0]
-        points = np.array([item for sublist in points for item in sublist])
-        points = np.float32(points)
-        points = np.expand_dims(np.asarray(points), axis=0)
-        points = points[np.newaxis, :]
-        points_tensor = torch.Tensor(points)
+        image_tensor = self._get_image_tensor(item_path=inv_data_path)
+        points_tensor = self._get_points_tensor(data=inv_data)
 
         sample = {'image': image_tensor, 'points': points_tensor}
 
-        if self.transform:
-            sample = self.transform(sample)
-
         return sample
 
-    def __len__(self):
-        return len(self.data)
-
-    def initialize_data(self, dir_p):
+    def _initialize_data(self, dir_p):
+        """
+        :param dir_p: data directory path
+        :return: none -> update the list of dataset
+        """
+        # list all the json files in root directory
         for subdir, dirs, files in os.walk(dir_p):
             for file in files:
                 if file.endswith(".json"):
                     self.data.append(os.path.join(subdir, file))
 
-    def length(self):
-        self.__len__()
+    def _get_image_tensor(self, item_path):
+        """
+        :param item_path: the path of specific data
+        :return: image torch tensor
+        """
+        img_name = item_path.rsplit('\\', 1)[-1].split(".")[0] + ".png"
+        image_path = os.path.join(item_path.rsplit('\\', 1)[0], img_name)
 
+        padded_image = self._padding(Image.open(image_path), self.image_shape)
+        tensor_conversion = torchvision.transforms.ToTensor()
+        image_tensor = tensor_conversion(padded_image)
+        return image_tensor
+
+    def _get_points_tensor(self, data):
+        """
+        :param inv_data: json file of a specific data
+        :return: points torch tensor
+        """
+
+        points = [d['points'] for d in data["shapes"] if d['label'] == 'Wrist Joint Line'][0]
+        points = np.array([item for sublist in points for item in sublist])
+        points = np.float32(points)
+
+        # shift the coordinates regarding the padding size
+        # start point
+        points[0] += self.pad_x_1
+        points[1] += self.pad_y_1
+
+        # end point
+        points[2] += self.pad_x_1
+        points[3] += self.pad_y_1
+
+        points = np.expand_dims(np.asarray(points), axis=0)
+        points = points[np.newaxis, :]
+        points_tensor = torch.Tensor(points)
+
+        return points_tensor
+
+    def _padding(self, image, image_size):
+        """
+        :param image: the input image
+        :param image_size: final desired image size (in our case 512*512)
+        :return: image_t: transformed padded image
+        """
+
+        f_x = image.size[0]
+        f_y = image.size[1]
+
+        # compute padding size
+        pad_x_1 = int((image_size - f_x) / 2)
+        pad_y_1 = int((image_size - f_y) / 2)
+
+        if f_x % 2 == 0:  # check the image size is even or not
+            pad_x_2 = pad_x_1
+        else:  # if the image size is odd, right and left padding is not equal
+            pad_x_2 = pad_x_1 + 1
+
+        if f_y % 2 == 0:
+            pad_y_2 = pad_y_1
+
+        else:
+            pad_y_2 = pad_y_1 + 1
+
+        # store the padding to shift the start and end points coordinates
+        self.pad_x_1 = pad_x_1
+        self.pad_y_1 = pad_y_1
+
+        # padding
+        transform = torchvision.transforms.Pad((pad_x_1, pad_y_1, pad_x_2, pad_y_2))
+        image_t = transform(image)
+
+        return image_t
