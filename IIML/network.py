@@ -8,9 +8,9 @@ class CNN(LightningModule):
     def __init__(self):
         super().__init__()
 
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(8, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv2d(1, 8, kernel_size=(3, 3), stride=(1, 1), padding=1)
+        self.conv2 = nn.Conv2d(8, 64, kernel_size=(3, 3), stride=(1, 1), padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=1)
         self.pool = nn.MaxPool2d((2, 2), stride=(2, 2))
         self.fc = nn.Linear(64*64*128, 4)
 
@@ -26,7 +26,7 @@ class CNN(LightningModule):
     def training_step(self, batch, batch_nb):
         x = batch["image"]
         y = batch["points"].squeeze()
-        loss = F.cross_entropy(self(x), y)
+        loss = F.mse_loss(self(x), y)
         return loss
 
     def configure_optimizers(self):
