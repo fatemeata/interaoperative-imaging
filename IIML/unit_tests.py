@@ -12,6 +12,11 @@ class UnitTests:
         self.dataset = dataset.WristDataset(root_dir=self.root_dir)
         self.data = []
 
+    def iterate_dataset(self):
+        for i in range(len(self.dataset)):
+            self.data.append(self.dataset[i])
+            print(f"data {i}")
+
     def show_image(self, idx):
         item = self.dataset[idx]
         image_tensor = item['image']
@@ -49,4 +54,5 @@ class UnitTests:
 if __name__ == "__main__":
     unit_test = UnitTests()
     print("NUMBER OF IMAGES: ", len(unit_test.dataset))
-    unit_test.show_image(idx=165)
+    unit_test.iterate_dataset()
+    unit_test.show_image(idx=8)
