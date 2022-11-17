@@ -7,10 +7,11 @@ import json
 import numpy as np
 import os
 import skimage
+import PIL
 from PIL import Image, ImageDraw
 import torchvision.transforms as T
 import matplotlib as plt
-
+from skimage.color import rgb2gray
 
 class WristDataset(data.Dataset):
 
@@ -43,7 +44,6 @@ class WristDataset(data.Dataset):
 
         inv_data_path = self.data[idx]
         inv_data = json.load(open(inv_data_path))
-
         image_tensor = self._get_image_tensor(item_path=inv_data_path)
         points_tensor = self._get_points_tensor(data=inv_data)
 
@@ -69,8 +69,11 @@ class WristDataset(data.Dataset):
         """
         img_name = item_path.rsplit('\\', 1)[-1].split(".")[0] + ".png"
         image_path = os.path.join(item_path.rsplit('\\', 1)[0], img_name)
-
-        padded_image = self._padding(Image.open(image_path), self.image_shape)
+        img = Image.open(image_path)
+        grayscale_img = PIL.ImageOps.grayscale(img)
+        # img = skimage.io.imread(image_path)
+        # grayscale_img = skimage.color.rgb2gray(img)
+        padded_image = self._padding(grayscale_img, self.image_shape)
         tensor_conversion = torchvision.transforms.ToTensor()
         image_tensor = tensor_conversion(padded_image)
         return image_tensor
