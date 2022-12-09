@@ -1,17 +1,11 @@
-import io
 import torch
 import torchvision
 import torch.utils.data as data
-import glob
 import json
 import numpy as np
 import os
-import skimage
 import PIL
-from PIL import Image, ImageDraw
-import torchvision.transforms as T
-import matplotlib as plt
-from skimage.color import rgb2gray
+from PIL import Image
 import re
 
 
@@ -45,7 +39,11 @@ class WristDataset(data.Dataset):
             idx = idx.tolist()
 
         inv_data_path = self.data[idx]
-        # use the folder name as patient id
+
+        #  Data path is different in remote server and local machine. line 46 for remote machine, 47 for local machine
+        #  use the folder name as patient id
+
+        # patient_id = re.findall(r'\d+', inv_data_path.split("/")[1])[0]
         patient_id = re.findall(r'\d+', inv_data_path.split("\\")[1])[0]
         with open(inv_data_path) as f:
             inv_data = json.load(f)
@@ -54,6 +52,10 @@ class WristDataset(data.Dataset):
 
         sample = {'image': image_tensor, 'points': points_tensor,
                   'patient_id': patient_id, 'index': idx}
+
+        # Data Augmentation
+        if self.transform:
+            sample = self.transform(sample)
 
         return sample
 
@@ -73,12 +75,16 @@ class WristDataset(data.Dataset):
         :param item_path: the path of specific data
         :return: image torch tensor
         """
-        img_name = item_path.rsplit('\\', 1)[-1].split(".")[0] + ".png"
-        image_path = os.path.join(item_path.rsplit('\\', 1)[0], img_name)
+        #  Data path is different in remote server and local machine.
+        #  for remote server use the first two lines 82-83
+        #  for local server use the other 84-85
+
+        # img_name = item_path.rsplit("/", 1)[-1].split(".")[0] + ".png"
+        # image_path = os.path.join(item_path.rsplit("/", 1)[0], img_name)
+        img_name = item_path.rsplit("\\", 1)[-1].split(".")[0] + ".png"
+        image_path = os.path.join(item_path.rsplit("\\", 1)[0], img_name)
         img = Image.open(image_path)
         grayscale_img = PIL.ImageOps.grayscale(img)
-        # img = skimage.io.imread(image_path)
-        # grayscale_img = skimage.color.rgb2gray(img)
         padded_image = self._padding(grayscale_img, self.image_shape)
         tensor_conversion = torchvision.transforms.ToTensor()
         image_tensor = tensor_conversion(padded_image)
